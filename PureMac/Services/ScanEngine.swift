@@ -31,6 +31,8 @@ actor ScanEngine {
             return scanXcodeJunk()
         case .brewCache:
             return scanBrewCache()
+        case .bootOptimization:
+            return scanBootOptimization()
         }
     }
 
@@ -335,6 +337,103 @@ actor ScanEngine {
 
         let totalSize = items.reduce(0) { $0 + $1.size }
         return CategoryResult(category: .brewCache, items: items, totalSize: totalSize)
+    }
+
+    private func scanBootOptimization() -> CategoryResult {
+        var items: [CleanableItem] = []
+
+        let launchAgentsPaths = [
+            "\(home)/Library/LaunchAgents",
+            "/Library/LaunchAgents",
+        ]
+
+        let launchDaemonsPaths = [
+            "/Library/LaunchDaemons",
+        ]
+
+        let knownProblematicAgents = [
+            "com.google.keystone.agent.plist",
+            "com.google.keystone.xpcservice.plist",
+            "com.google.GoogleUpdater.wake.plist",
+            "com.valvesoftware.steamclean.plist",
+            "com.dropbox.DropboxUpdater.wake.plist",
+            "com.dropbox.dropboxmacupdate.agent.plist",
+            "com.dropbox.dropboxmacupdate.xpcservice.plist",
+            "com.macpaw.CleanMyMac4.Updater.plist",
+            "com.epicgames.launcher.plist",
+        ]
+
+        let knownProblematicDaemons = [
+            "com.macpaw.CleanMyMac4.Agent.plist",
+            "com.muse.authservice.plist",
+        ]
+
+        for path in launchAgentsPaths {
+            items.append(contentsOf: scanLaunchItems(
+                path: path,
+                knownProblematic: knownProblematicAgents
+            ))
+        }
+
+        for path in launchDaemonsPaths {
+            items.append(contentsOf: scanLaunchItems(
+                path: path,
+                knownProblematic: knownProblematicDaemons
+            ))
+        }
+
+        let totalSize = items.reduce(0) { $0 + $1.size }
+        return CategoryResult(category: .bootOptimization, items: items, totalSize: totalSize)
+    }
+
+    private func scanLaunchItems(path: String, knownProblematic: [String]) -> [CleanableItem] {
+        var items: [CleanableItem] = []
+
+        guard fileManager.fileExists(atPath: path),
+              fileManager.isReadableFile(atPath: path) else { return [] }
+
+        do {
+            let contents = try fileManager.contentsOfDirectory(atPath: path)
+            for item in contents {
+                guard item.hasSuffix(".plist") else { continue }
+
+                let fullPath = (path as NSString).appendingPathComponent(item)
+                guard let fileAttrs = try? fileManager.attributesOfItem(atPath: fullPath),
+                      let size = fileAttrs[.size] as? Int64 else { continue }
+
+                if knownProblematic.contains(item) || isOrphanLaunchItem(path: fullPath) {
+                    items.append(CleanableItem(
+                        name: item,
+                        path: fullPath,
+                        size: size,
+                        category: .bootOptimization,
+                        isSelected: knownProblematic.contains(item),
+                        lastModified: fileAttrs[.modificationDate] as? Date
+                    ))
+                }
+            }
+        } catch {
+            Logger.shared.log("Cannot enumerate \(path): \(error.localizedDescription)", level: .warning)
+        }
+
+        return items
+    }
+
+    private func isOrphanLaunchItem(path: String) -> Bool {
+        guard let plist = try? readPlist(path: path) as? [String: Any],
+              let program = plist["Program"] as? String ?? plist["ProgramArguments"] as? [String]??.first else {
+            return false
+        }
+
+        let binaryPath = program is String ? program : (plist["ProgramArguments"] as? [String])?.first ?? ""
+        guard !binaryPath.isEmpty else { return false }
+
+        return !fileManager.fileExists(atPath: binaryPath)
+    }
+
+    private func readPlist(path: String) -> Any? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        return try? PropertyListSerialization.propertyList(from: data, format: nil)
     }
 
     // MARK: - Helpers
