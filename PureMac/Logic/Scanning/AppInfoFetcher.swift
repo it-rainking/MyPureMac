@@ -37,6 +37,11 @@ final class AppInfoFetcher {
         "com.apple.Maps", "com.apple.Photos", "com.apple.Notes",
         "com.apple.reminders", "com.apple.Stocks", "com.apple.Home",
         "com.apple.weather", "com.apple.clock", "com.apple.Passwords",
+        // v5.0 Synthesis: whitelist estesa allineata a CleanMac (utility di sistema Apple)
+        "com.apple.iBooksX", "com.apple.Dictionary", "com.apple.Automator",
+        "com.apple.ScriptEditor2", "com.apple.DiskUtility", "com.apple.keychainaccess",
+        "com.apple.FontBook", "com.apple.Image_Capture", "com.apple.MigrationAssistant",
+        "com.apple.freeform", "com.apple.VoiceMemos", "com.apple.shortcuts",
     ]
 
     private init() {}
