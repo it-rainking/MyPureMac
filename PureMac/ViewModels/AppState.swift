@@ -42,6 +42,13 @@ final class AppState: ObservableObject {
     @Published var isLoadingApps: Bool = false
     @Published var isScanningAppFiles: Bool = false
 
+    // MARK: - Orphan Search Guards
+
+    /// Normalized prefixes of Apple system items that must never be reported as
+    /// orphans. `skipReverse` lists "apple", but a bundle-id-style name such as
+    /// "com.apple.foo" normalizes to "comapplefoo" and would slip past it.
+    static let systemNamePrefixes: [String] = ["comapple", "apple"]
+
     // MARK: - Services
 
     var scheduler = SchedulerService()
@@ -147,7 +154,12 @@ final class AppState: ObservableObject {
                 for item in contents {
                     let normalized = item.normalizedForMatching()
 
-                    // Skip known system items
+                    // Skip known system items.
+                    // NOTE: skipReverse matches *prefixes* of the normalized name.
+                    // "com.apple.X" normalizes to "comappleX", which does NOT have
+                    // the prefix "apple" — without this explicit guard every Apple
+                    // system file would be reported as an orphan.
+                    if Self.systemNamePrefixes.contains(where: { normalized.hasPrefix($0) }) { continue }
                     if skipReverse.contains(where: { normalized.hasPrefix($0) }) { continue }
 
                     // Check if this item belongs to any known app
